@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SYSTEM_PROMPT, buildUserMessage, MODEL_CONFIG } from "./prompt";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +14,14 @@ export async function POST(req: NextRequest) {
     }
 
     const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.OPENROUTER_MODEL_ID || "anthropic/claude-3.5-sonnet";
+    const model = process.env.OPENROUTER_MODEL_ID;
+
+    if (!model) {
+      return NextResponse.json(
+        { error: "OPENROUTER_MODEL_ID is not set in your .env file." },
+        { status: 500 }
+      );
+    }
 
     if (!apiKey) {
       return NextResponse.json(
@@ -22,27 +30,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const systemPrompt = `You are an expert prompt engineer and analyst. Your job is to reverse-engineer user prompts to uncover their true intent, extract key elements, and reconstruct a detailed, high-quality version of the original prompt.
-
-When given a prompt (even rough/short/vague), you will:
-1. Identify the core intent and goal
-2. Extract all key elements (context, format, tone, audience, constraints, desired output, etc.)
-3. Reconstruct a comprehensive, detailed version that would produce far better AI responses
-4. Suggest concrete improvements for the user to make their prompting even better
-5. Score the original prompt quality from 0-100
-
-Return ONLY a valid JSON object with this exact structure (no markdown, no extra text):
-{
-  "intent": "A concise 1-2 sentence description of what the user actually wants to achieve",
-  "keyElements": ["element1", "element2", "element3", "...up to 8 elements"],
-  "detailedPrompt": "The full, reconstructed prompt text that is detailed, specific, and optimized. This should be 3-10x more detailed than the original and ready to paste directly into an AI. Include context, desired format, tone, audience, constraints, examples if helpful, and step-by-step structure where appropriate.",
-  "suggestedImprovements": ["improvement1", "improvement2", "improvement3", "...3-5 improvements"],
-  "promptScore": 75
-}
-
-The detailedPrompt should be a complete, standalone prompt — not a description of a prompt. Write it AS the prompt the user should send.`;
-
-    const userMessage = `Reverse engineer this prompt: "${prompt}"`;
+    const requestBody = {
+      model,
+      max_tokens: MODEL_CONFIG.max_tokens,
+      temperature: MODEL_CONFIG.temperature,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: buildUserMessage(prompt) },
+      ],
+    };
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -52,56 +48,87 @@ The detailedPrompt should be a complete, standalone prompt — not a description
         "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
         "X-Title": "Reverse Prompt Engineer",
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: 2000,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
-        ],
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    const aiData = await response.json();
+
     if (!response.ok) {
-      const err = await response.json();
-      console.error("OpenRouter API error:", err);
-      return NextResponse.json(
-        { error: "AI service error. Please try again." },
-        { status: 502 }
-      );
+      // Log the full error details from OpenRouter for debugging
+      console.error("OpenRouter API error:", {
+        status: response.status,
+        statusText: response.statusText,
+        body: JSON.stringify(aiData),
+      });
+
+      // Return the actual OpenRouter error message to the client for easier debugging
+      const errorMessage =
+        aiData?.error?.message ||
+        aiData?.error ||
+        `API error ${response.status}: ${response.statusText}`;
+
+      return NextResponse.json({ error: String(errorMessage) }, { status: 502 });
     }
 
-    const aiData = await response.json();
     const rawContent = aiData.choices?.[0]?.message?.content;
 
     if (!rawContent) {
+      console.error("Empty content in AI response:", JSON.stringify(aiData));
       return NextResponse.json({ error: "No response from AI" }, { status: 502 });
     }
 
-    // Parse the JSON response
+    // Parse JSON - strip markdown fences and BOM if present
     let parsed;
     try {
-      // Strip potential markdown code fences
-      const clean = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const clean = rawContent
+        .replace(/^\uFEFF/, "")          // strip BOM
+        .replace(/```json\s*/gi, "")     // strip opening fence
+        .replace(/```\s*$/g, "")        // strip closing fence
+        .replace(/,\s*([}\]])/g, "$1")  // fix trailing commas
+        .trim();
       parsed = JSON.parse(clean);
     } catch {
-      console.error("Failed to parse AI response:", rawContent);
-      return NextResponse.json(
-        { error: "Failed to parse AI response. Please try again." },
-        { status: 502 }
-      );
+      // Fallback: extract JSON object from within surrounding text
+      const match = rawContent.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {
+          console.error("Failed to parse AI response:", rawContent);
+          return NextResponse.json(
+            { error: "Failed to parse AI response. Please try again." },
+            { status: 502 }
+          );
+        }
+      } else {
+        console.error("No JSON found in AI response:", rawContent);
+        return NextResponse.json(
+          { error: "Failed to parse AI response. Please try again." },
+          { status: 502 }
+        );
+      }
     }
 
-    // Validate structure
+    // Validate and sanitize the response structure
     const result = {
-      intent: String(parsed.intent || ""),
-      keyElements: Array.isArray(parsed.keyElements) ? parsed.keyElements.map(String) : [],
-      detailedPrompt: String(parsed.detailedPrompt || ""),
+      intent: String(parsed.intent || "").trim(),
+      keyElements: Array.isArray(parsed.keyElements)
+        ? parsed.keyElements.map((el: unknown) => String(el)).filter(Boolean)
+        : [],
+      detailedPrompt: String(parsed.detailedPrompt || "").trim(),
       suggestedImprovements: Array.isArray(parsed.suggestedImprovements)
-        ? parsed.suggestedImprovements.map(String)
+        ? parsed.suggestedImprovements.map((imp: unknown) => String(imp)).filter(Boolean)
         : [],
       promptScore: Math.min(100, Math.max(0, Number(parsed.promptScore) || 50)),
     };
+
+    // Guard against empty critical fields
+    if (!result.intent || !result.detailedPrompt) {
+      return NextResponse.json(
+        { error: "Incomplete AI response. Please try again." },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json(result);
   } catch (err) {
