@@ -68,9 +68,9 @@ export default function Home() {
   };
 
   const scoreColor = (score: number) => {
-    if (score >= 80) return "#00ff88";
-    if (score >= 60) return "#ffd700";
-    return "#ff6b6b";
+    if (score >= 80) return "#22c55e";
+    if (score >= 60) return "#a1a1a1";
+    return "#ef4444";
   };
 
   const scoreLabel = (score: number) => {
@@ -91,7 +91,7 @@ export default function Home() {
         <header className="header">
           <div className="logo-row">
             <div className="logo-icon">
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <svg width="20" height="20" viewBox="0 0 28 28" fill="none">
                 <path d="M4 14C4 8.477 8.477 4 14 4s10 4.477 10 10-4.477 10-10 10S4 19.523 4 14z" stroke="currentColor" strokeWidth="1.5"/>
                 <path d="M10 14h8M14 10l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 <circle cx="14" cy="14" r="2" fill="currentColor"/>
@@ -124,7 +124,7 @@ export default function Home() {
               value={inputPrompt}
               onChange={(e) => setInputPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="E.g. 'write me a story about a robot' or paste any prompt you want to reverse engineer..."
+              placeholder="e.g. 'write me a story about a robot' — paste any prompt to reverse engineer..."
               rows={6}
               maxLength={5000}
             />
@@ -145,10 +145,10 @@ export default function Home() {
                   </>
                 ) : (
                   <>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                       <path d="M2 8h12M8 2l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    Reverse Engineer
+                    Reverse
                   </>
                 )}
               </button>
@@ -157,7 +157,7 @@ export default function Home() {
 
           {error && (
             <div className="error-banner">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
                 <path d="M8 5v3M8 11h.01" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
@@ -196,7 +196,7 @@ export default function Home() {
                   />
                 </div>
               </div>
-              <div className="score-badge" style={{ borderColor: scoreColor(result.promptScore), color: scoreColor(result.promptScore) }}>
+              <div className="score-badge" style={{ borderColor: `${scoreColor(result.promptScore)}33`, color: scoreColor(result.promptScore) }}>
                 <span className="score-num">{result.promptScore}</span>
                 <span className="score-level">{scoreLabel(result.promptScore)}</span>
               </div>
@@ -235,14 +235,14 @@ export default function Home() {
                 <button className="copy-btn" onClick={handleCopy}>
                   {copied ? (
                     <>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
                         <path d="M2 7l3.5 3.5L12 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
-                      Copied!
+                      Copied
                     </>
                   ) : (
                     <>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
                         <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.2"/>
                         <path d="M2 10V2h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
                       </svg>
