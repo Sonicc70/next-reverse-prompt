@@ -221,7 +221,7 @@ export default function Home() {
                 {result.keyElements.map((el, i) => (
                   <li key={i} className="element-item">
                     <span className="element-bullet" />
-                    {el}
+                    {el.replace(/\[([^\]]+)\]/g, '$1')}
                   </li>
                 ))}
               </ul>
